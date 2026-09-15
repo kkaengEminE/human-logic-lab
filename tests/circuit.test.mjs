@@ -1,0 +1,11 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {evaluateCircuit,connectCircuit} from '../dist/circuit.mjs';
+const nodes=[{id:'a',kind:'INPUT',value:1},{id:'b',kind:'INPUT',value:1},{id:'c',kind:'INPUT',value:0},{id:'d',kind:'INPUT',value:0},{id:'and',kind:'AND'},{id:'xor',kind:'XOR'},{id:'or',kind:'OR'},{id:'out',kind:'LAMP'}];
+const edges=[{from:'a',to:'and',port:0},{from:'b',to:'and',port:1},{from:'c',to:'xor',port:0},{from:'d',to:'xor',port:1},{from:'and',to:'or',port:0},{from:'xor',to:'or',port:1},{from:'or',to:'out',port:0}];
+test('four independently placed inputs and chained mixed gates',()=>{const v=evaluateCircuit(nodes,edges);assert.equal(v.get('and'),1);assert.equal(v.get('xor'),0);assert.equal(v.get('out'),1)});
+test('all binary gate input combinations',()=>{for(const kind of ['AND','OR','XOR'])for(const a of [0,1])for(const b of [0,1]){const ns=[{id:'a',kind:'INPUT',value:a},{id:'b',kind:'INPUT',value:b},{id:'g',kind}];assert.equal(evaluateCircuit(ns,[{from:'a',to:'g',port:0},{from:'b',to:'g',port:1}]).get('g'),kind==='AND'?a&b:kind==='OR'?a|b:a^b)}});
+test('missing connection differs from zero, including NOT',()=>{assert.equal(evaluateCircuit([{id:'n',kind:'NOT'}],[]).get('n'),null);assert.equal(evaluateCircuit(nodes,edges.slice(1)).get('out'),null);assert.equal(evaluateCircuit(nodes,edges,new Set(['and'])).get('out'),null)});
+test('replace a single inlet, retain other inlet and fan out',()=>{let es=connectCircuit(nodes,edges,'c','and',0);assert.equal(es.length,edges.length);assert.equal(evaluateCircuit(nodes,es).get('out'),0);es=connectCircuit(nodes,es,'a','xor',0);assert.equal(evaluateCircuit(nodes,es).get('out'),1)});
+test('reject loops and invalid endpoints without mutation',()=>{assert.throws(()=>connectCircuit(nodes,edges,'or','and',0),/순환/);assert.throws(()=>connectCircuit(nodes,edges,'a','a',0));assert.throws(()=>connectCircuit(nodes,edges,'out','and',0));assert.throws(()=>connectCircuit(nodes,edges,'a','and',2));assert.equal(edges.length,7)});
+test('NOT zero and multiple outputs',()=>{const ns=[{id:'a',kind:'INPUT',value:0},{id:'n',kind:'NOT'},{id:'x',kind:'LAMP'},{id:'y',kind:'LAMP'}];const es=[{from:'a',to:'n',port:0},{from:'n',to:'x',port:0},{from:'a',to:'y',port:0}];assert.equal(evaluateCircuit(ns,es).get('x'),1);assert.equal(evaluateCircuit(ns,es).get('y'),0)});
